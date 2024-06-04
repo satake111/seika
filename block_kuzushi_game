@@ -1,0 +1,339 @@
+# ---------------------------------------------
+#    ブロック崩しゲーム
+#-----------------------------------------------
+
+from tkinter import *
+from dataclasses import dataclass
+import time
+import random
+
+tk = Tk()
+tk.title("Game")
+
+WALL_EAST = 800  # X最大
+WALL_SOUTH = 700 # Y最大
+
+canvas = Canvas(tk, width=WALL_EAST, height=WALL_SOUTH, bd=0,
+                highlightthickness=0, bg="black")
+canvas.pack()
+
+# 初期状態の設定
+DURATION = 0.01  # 描画間隔（秒）
+PADDLE_X0 = WALL_EAST/2 - 50  # パドルの初期位置（X）
+PADDLE_Y0 = WALL_SOUTH - 100  # パドルの初期位置（Y）
+BALL_X0 = WALL_EAST/2
+
+PAD_VX = 5       # パドルの速度
+BALL_VX = 0      # ボールの速度
+BALL_VY = 4
+
+BLOCK_X = 10 # ブロックの位置（Ｘ）
+BLOCK_Y = 50 # Y
+BLOCK_W = 60 # ブロックの幅
+BLOCK_H = 20 # 高さ
+
+NUM_ROWS = 5    # ブロックの数（行）
+NUM_COLUMNS = 11 # ブロックの数（列）
+ 
+#spear = None
+
+score = 0
+ADD_SCORE = 10
+
+
+# 変える色を用意する
+COLORS = ["blue", "red", "green", "yellow", "brown", "gray"]
+
+@dataclass
+class Block:
+    id: int
+    x: int
+    y: int
+    w: int
+    h: int
+    bc: int # 硬さのカウンタ break counter
+    c: str
+
+# block
+# ブロックの描画・登録
+def make_block(x, y, w=40, h=120, bc=1, c="white"):
+    id = canvas.create_rectangle(x, y, x+w, y+h,
+                                 fill=c, outline=c)
+    return Block(id, x, y, w, h, bc, c)
+
+# ブロックを消す
+def delete_block(block):
+    canvas.delete(block.id)
+
+# 複数のブロックの生成
+def make_blockss(n_rows, n_columns, x0, y0, w, h, padw=10, padh=10):
+    blockss = []
+    for i in range(n_rows):
+        blocks = []
+        x = x0
+        for j in range(n_columns):
+            blocks.append(make_block(x, y0, w, h))
+            x += w + padw
+        blockss.append(blocks)
+        y0 += h + padh
+    return blockss
+
+# wall
+# 壁の生成
+def make_walls(ox, oy, width, height):
+    canvas.create_rectangle(ox, oy, ox + width, oy + height)
+
+@dataclass
+class Ball:
+    id: int
+    x: int
+    y: int
+    d: int
+    vx: int
+    vy: int
+    c: str
+
+# ball
+# ボールの描画・登録
+def make_ball(x, y, d, vx, vy, c="white"):
+    id = canvas.create_oval(x, y, x+d, y+d,
+                            fill=c, outline=c)
+    return Ball(id, x, y, d, vx, vy, c)
+
+# ボールの移動（左右）
+def move_ball(ball):
+    ball.x += ball.vx
+    ball.y += ball.vy
+
+# ボールの再描画
+def redraw_ball(ball):
+    canvas.coords(ball.id, ball.x, ball.y,
+                  ball.x + ball.d, ball.y + ball.d)
+
+@dataclass
+class Paddle:
+    id: int
+    x: int
+    y: int
+    w: int
+    h: int
+    vx: int
+    c: str
+
+# パドルの描画・登録
+def make_paddle(x, y, w=100, h=20, c="white"):
+    id = canvas.create_rectangle(x, y, x+w, y+h,
+                                 fill=c, outline=c)
+    return Paddle(id, x, y, w, h, 0, c)
+
+# パドルの移動（上下）
+def move_paddle(pad):
+    pad.x += pad.vx
+
+# パドルの再描画
+def redraw_paddle(pad):
+    canvas.coords(pad.id, pad.x, pad.y,
+                  pad.x + pad.w, pad.y + pad.h)
+
+# パドルの色を変える
+def change_paddle_color(pad, c="red"):
+    canvas.itemconfigure(pad.id, fill=c)
+    canvas.itemconfigure(pad.id, outline=c)
+    redraw_paddle(pad)
+
+# パドルの長さを変える
+def change_paddle_length(pad):
+    if pad.w > 50:
+        pad.w -= 2.5
+
+#------------------------------------------------
+# パドル操作のイベントハンドラ
+def right_paddle(event):  # 速度を右向きに設定
+    paddle.vx = PAD_VX
+
+def left_paddle(event):
+    paddle.vx = -PAD_VX
+
+def stop_paddle(event): # 速度0
+    paddle.vx = 0
+
+@dataclass
+class Spear:
+    id: int 
+    x: int
+    y: int
+    w: int
+    h: int
+    vy: int
+    c: str
+#---------------------------
+# spear
+# 槍の描画・登録
+def make_spear(x, y, w=1, h=40, vy=5, c="yellow"):
+    id = canvas.create_rectangle(x, y, x+w, y+h,
+                                 fill=c, outline=c)
+    return Spear(id, x, y, w, h, vy, c)
+
+# 槍を消す
+def delete_spear(spear):
+    canvas.delete(spear.id)
+
+# 複数の槍の生成
+
+
+# 槍の移動（上下）
+def move_spear(spear):
+    spear.y += spear.vy
+
+# 槍の再描画
+def redraw_spear(spear):
+    canvas.coords(spear.id, spear.x, spear.y,
+                  spear.x + spear.w, spear.y + spear.h)
+
+#@dataclass
+#class Bonus:
+#    id: int
+    
+@dataclass
+class Game:
+    start: bool
+#------------------------------------
+def game_start(event):
+    game.start = True
+#----------------------------------------------------
+def game_over():
+    canvas.create_text(WALL_EAST/2, WALL_SOUTH/2, text="Game Over!",
+                           font=('FixedSys', 50), fill="white")
+#--------------------------------------------------------------
+
+#tk = Tk()
+#canvas = Canvas(tk, width=800, height=600, bd=0, bg="black")
+#canvas.pack()
+tk.update()
+
+game = Game(False)
+
+make_walls(0, 0, WALL_EAST, WALL_SOUTH)
+paddle = make_paddle(PADDLE_X0, PADDLE_Y0)
+ball = make_ball(BALL_X0, PADDLE_Y0 - 10, 10, BALL_VX, -BALL_VY)
+#block = make_block(BLOCK_X, BLOCK_Y, BLOCK_W, BLOCK_H)
+blockss = make_blockss(NUM_ROWS, NUM_COLUMNS, BLOCK_X, BLOCK_Y, BLOCK_W, BLOCK_H)
+spears = []
+id_game_over = 0
+
+# イベントとイベントハンドラを連結する
+canvas.bind_all('<KeyPress-space>', game_start)
+canvas.bind_all('<KeyPress-Right>', right_paddle)
+canvas.bind_all('<KeyPress-Left>', left_paddle)
+canvas.bind_all('<KeyRelease-Right>', stop_paddle)
+canvas.bind_all('<KeyRelease-Left>', stop_paddle)
+
+
+id_score = canvas.create_text(10, 10, text=("score:" + str(score)),
+                              font=("FireSys", 20),
+                              justify="left", anchor=NW,
+                              fill="white")
+
+#-------------------------------------------------
+# SPACEの入力待ち
+id_text = canvas.create_text(WALL_EAST/2, WALL_SOUTH/2, text="Press 'SPACE' to start",
+                             font=('FixedSys', 30), fill="white")
+tk.update()
+
+while not game.start:
+    tk.update()
+    time.sleep(DURATION)
+
+canvas.delete(id_text)  # SPACEが押されたらメッセージ削除
+tk.update()
+
+#----------------------------------------------------
+# プログラムのメインループ
+while True:
+    move_paddle(paddle) # パドルの移動
+    move_ball(ball)     # ボールの移動
+    if spears != []:
+        for spear in spears:
+            move_spear(spear) # 槍の移動
+
+    if ball.x + ball.vx <= 0: # ボールが壁の左端についた
+        ball.vx = -ball.vx
+    if ball.x + ball.d >= WALL_EAST: # ボールが壁の右端についた
+        ball.vx = -ball.vx
+    if ball.y + ball.vy <= 0: # ボールが壁の上端についた
+        ball.vy = -ball.vy
+    if ball.y + ball.d + ball.vy >= WALL_SOUTH: # 下に逸らした
+        game_over()
+        break
+    
+    if spears != []:
+        for spear in spears:
+            if (paddle.x <= spear.x <= paddle.x + paddle.w \
+                and spear.y + spear.h >= paddle.y \
+                and spear.y <= paddle.y + paddle.h):
+                redraw_paddle(paddle)
+                redraw_spear(spear)
+                game_over()
+                id_game_over = 1
+    if id_game_over == 1: break
+    
+    # ボールがパドルの上に届き、ボールがパドルの幅に収まっている
+    if (ball.y + ball.d >= paddle.y \
+        and paddle.x <= ball.x + ball.d \
+        and ball.x <= paddle.x + paddle.w):
+        #change_paddle_color(paddle, random.choice(COLORS)) # 色をランダムに変える
+        ball.vy = - ( ball.vy + 0.05 ) # だんだん速くなる
+        #dis = ball.x - (paddle.x + paddle.w/2)
+        #print(dis)
+        #dvx = dis/50
+        #ball.vx += dvx
+        ball.vx = int(6 * (ball.x + ball.d/2 - paddle.x) / paddle.w) - 3
+        change_paddle_length(paddle)
+
+    for blocks in blockss:
+        for block in blocks:
+            # ボールのY位置がブロックに届き、X位置もブロックの範囲内
+            if (block.y <= ball.y + ball.d \
+                and ball.y <= block.y + block.h \
+                and block.x <= ball.x + ball.d \
+                and ball.x <= block.x + block.w):
+                ball.vy = -ball.vy
+                score += ADD_SCORE # スコアにADD_SCOREを加点
+                canvas.itemconfigure(id_score, text="score:" + str(score))
+                block.bc -= 1 # 硬さのカウントダウン
+                if block.bc == 0:
+                    delete_block(block)
+                    blocks.remove(block) # ブロックスリストからこのブロックを消す
+        if blocks == []:
+            blockss.remove(blocks)
+                
+        # ボールのX位置がブロックに届き、Y位置もブロックの範囲内
+        #if (block.x <= ball.x + ball.d \
+        #    and ball.x <= block.x + block.w \
+        #    and block.y <= ball.y + ball.d \
+        #    and ball.y <= block.y + block.h):
+        #    ball.vx = -ball.vx
+        #    block.bc -= 1
+        #    if block.bc == 0:
+        #        delete_block(block)
+        #        blocks.remove(block) # ブロックスリストからこのブロックを消す
+        
+    if blockss == []:
+        canvas.create_text(WALL_EAST/2, WALL_SOUTH/2, text="Clear!",
+                           font=('FixedSys', 50), fill="white")
+        break  # blocksリストが空なら終了
+
+    if random.random() < 0.01: # 確率1%で槍を発生させる
+        spears.append(make_spear(random.randint(100, WALL_EAST-100), 10))
+    for spear in spears:
+        if spear.y + spear.h >= WALL_SOUTH:
+            delete_spear(spear)
+            spears.remove(spear)
+    
+    redraw_paddle(paddle) # パドルの再描画
+    redraw_ball(ball)     # ボールの再描画
+    for spear in spears:
+        redraw_spear(spear) # 槍の再描画
+    tk.update()           # 描画が画面に反映される
+    time.sleep(DURATION)  # 次に描画するまでsleep
+    
